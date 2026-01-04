@@ -1,0 +1,47 @@
+name: Auto Remediate Dependencies
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - run: npm install xml2js
+
+      - name: Run auto remediation
+        run: node tools/auto-remediate/index.js
+
+      - name: Commit changes
+        run: |
+          git config user.name "auto-remediator"
+          git config user.email "bot@github.com"
+          git checkout -b auto/remediate
+          git commit -am "chore: auto remediate vulnerable dependencies"
+          git push origin auto/remediate
+
+      - name: Open Pull Request
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr create \
+            --title "chore: auto remediate vulnerable dependencies" \
+            --body "PR gerado automaticamente com correções de dependências vulneráveis detectadas no dependency tree." \
+            --base main \
+            --head auto/remediate
