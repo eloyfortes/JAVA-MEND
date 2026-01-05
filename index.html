@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Mend → POM Auto-Assistido</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f4f4f4;
+      padding: 20px;
+    }
+    textarea {
+      width: 100%;
+      height: 180px;
+      margin-bottom: 15px;
+      font-family: monospace;
+      font-size: 13px;
+    }
+    button {
+      padding: 10px 20px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+<h1>Mend → POM Atualizado (assistivo)</h1>
+
+<h3>POM.xml</h3>
+<textarea id="pomInput"></textarea>
+
+<h3>dependency:tree</h3>
+<textarea id="treeInput"></textarea>
+
+<h3>Mend report (JSON)</h3>
+<textarea id="mendInput"></textarea>
+
+<button onclick="generatePom()">Gerar POM Atualizado</button>
+
+<h3>POM Gerado</h3>
+<textarea id="output" readonly></textarea>
+
+<script>
+function parseDependencyTree(text) {
+  const deps = new Set();
+
+  text.split('\n').forEach(line => {
+    const m = line.match(/ ([a-zA-Z0-9_.-]+):([a-zA-Z0-9_.-]+):[^:]+:([0-9A-Za-z_.-]+)/);
+    if (m) {
+      deps.add(`${m[1]}:${m[2]}`);
+    }
+  });
+
+  return deps;
+}
+
+function extractFixesFromMend(mend) {
+  const fixes = new Map();
+
+  if (!mend.libraries) return fixes;
+
+  for (const lib of mend.libraries) {
+    if (!lib.vulnerabilities) continue;
+
+    for (const vul of lib.vulnerabilities) {
+      if (!vul.topFix?.fixResolution) continue;
+
+      const cleaned = vul.topFix.fixResolution
+        .replace(/Upgrade to version/i, '')
+        .trim();
+
+      cleaned.split(';').forEach(part => {
+        const p = part.trim();
+        const pieces = p.split(':');
+        if (pieces.length < 3) return;
+
+        const ga = `${pieces[0]}:${pieces[1]}`;
+        const version = pieces.slice(2).join(':').split(',')[0];
+
+        if (!fixes.has(ga)) {
+          fixes.set(ga, version);
+        }
+      });
+    }
+  }
+
+  return fixes;
+}
+
+function buildDependencyManagement(fixes, treeDeps, existingDM) {
+  let xml = [];
+  xml.push('<dependencyManagement>');
+  xml.push('  <dependencies>');
+
+  if (existingDM) {
+    xml.push(existingDM.trim());
+  }
+
+  for (const [ga, version] of fixes.entries()) {
+    if (!treeDeps.has(ga)) continue;
+    if (existingDM && existingDM.includes(`<artifactId>${ga.split(':')[1]}</artifactId>`)) {
+      continue;
+    }
+
+    const [groupId, artifactId] = ga.split(':');
+
+    xml.push('');
+    xml.push('    <dependency>');
+    xml.push(`      <groupId>${groupId}</groupId>`);
+    xml.push(`      <artifactId>${artifactId}</artifactId>`);
+    xml.push(`      <version>${version}</version>`);
+    xml.push('    </dependency>');
+  }
+
+  xml.push('');
+  xml.push('  </dependencies>');
+  xml.push('</dependencyManagement>');
+
+  return xml.join('\n');
+}
+
+function generatePom() {
+  const pom = document.getElementById('pomInput').value;
+  const tree = document.getElementById('treeInput').value;
+  const mendText = document.getElementById('mendInput').value;
+
+  let mend;
+  try {
+    mend = JSON.parse(mendText);
+  } catch {
+    alert('JSON do Mend inválido');
+    return;
+  }
+
+  const treeDeps = parseDependencyTree(tree);
+  const fixes = extractFixesFromMend(mend);
+
+  let existingDM = null;
+  let newPom = pom;
+
+  const dmRegex = /<dependencyManagement>([\s\S]*?)<\/dependencyManagement>/;
+
+  if (dmRegex.test(pom)) {
+    existingDM = pom.match(dmRegex)[1];
+    newPom = pom.replace(dmRegex, '');
+  }
+
+  const dmBlock = buildDependencyManagement(fixes, treeDeps, existingDM);
+
+  // injeta antes de </project>
+  newPom = newPom.replace(
+    '</project>',
+    '\n\n' + dmBlock + '\n\n</project>'
+  );
+
+  document.getElementById('output').value = newPom;
+}
+</script>
+
+</body>
+</html>
