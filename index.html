@@ -55,6 +55,19 @@ function parseDependencyTree(text) {
   return deps;
 }
 
+function isVersionGreater(v1, v2) {
+  const a = v1.split(/[\.-]/).map(x => isNaN(x) ? x : Number(x));
+  const b = v2.split(/[\.-]/).map(x => isNaN(x) ? x : Number(x));
+
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    if (a[i] === undefined) return false;
+    if (b[i] === undefined) return true;
+    if (a[i] > b[i]) return true;
+    if (a[i] < b[i]) return false;
+  }
+  return false;
+}
+
 function extractFixesFromMend(mend) {
   const fixes = new Map();
 
@@ -76,10 +89,19 @@ function extractFixesFromMend(mend) {
         if (pieces.length < 3) return;
 
         const ga = `${pieces[0]}:${pieces[1]}`;
-        const version = pieces.slice(2).join(':').split(',')[0];
+        const version = pieces
+          .slice(2)
+          .join(':')
+          .split(',')[0]   // 👈 ignora versões após vírgula
+          .trim();
 
         if (!fixes.has(ga)) {
           fixes.set(ga, version);
+        } else {
+          const current = fixes.get(ga);
+          if (isVersionGreater(version, current)) {
+            fixes.set(ga, version); // 👈 pega a MAIOR
+          }
         }
       });
     }
@@ -87,6 +109,7 @@ function extractFixesFromMend(mend) {
 
   return fixes;
 }
+
 
 function buildDependencyManagement(fixes, treeDeps, existingDM) {
   let xml = [];
