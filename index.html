@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>Capgemini • Mend POM Assistant</title>
+<title>Capgemini • AUTOMATIC POM </title>
 
 <style>
 * { box-sizing: border-box; }
@@ -82,7 +82,7 @@ footer {
 <body>
 
 <header>
-  Capgemini <span>• Mend POM Assistant</span>
+  Capgemini <span>• AUTOMATIC POM</span>
 </header>
 
 <main>
@@ -134,7 +134,7 @@ footer {
 </main>
 
 <footer>
-  Ferramenta assistiva • Decisão explícita • Humano no controle
+  zzz
 </footer>
 
 <script>
@@ -219,7 +219,7 @@ function generate(){
   let snippet='';
 
   if(stack==='SPRING'){
-    strategy+=`Sugestão:\nUtilizar Parent ou BOM do Spring para alinhar versões.\nA decisão não é aplicada automaticamente.\n`;
+    strategy+=`Sugestão:\nUtilizar Parent ou BOM do Spring para alinhar versões. (menos codigo no dependencyManagment)`;
     snippet=`<!-- Exemplo de Parent Spring Boot -->
 <parent>
   <groupId>org.springframework.boot</groupId>
@@ -227,23 +227,7 @@ function generate(){
   <version>${java<17?'2.7.18':'3.2.5'}</version>
   <relativePath/>
 </parent>`;
-  } else if(stack==='LIBERTY'){
-    strategy+=`Sugestão:\nProjetos Liberty não devem trocar o parent.\nUtilizar BOM oficial do Liberty.\n`;
-    snippet=`<!-- Exemplo de BOM do Liberty -->
-<dependencyManagement>
-  <dependencies>
-    <dependency>
-      <groupId>io.openliberty.features</groupId>
-      <artifactId>features-bom</artifactId>
-      <version>${java<11?'23.0.0.12':'24.0.0.3'}</version>
-      <type>pom</type>
-      <scope>import</scope>
-    </dependency>
-  </dependencies>
-</dependencyManagement>`;
-  } else {
-    strategy+=`Sugestão:\nProjeto genérico.\nGerenciar dependências via dependencyManagement pontual.\n`;
-  }
+  } 
 
   /* ===== Existing DM ===== */
   const dmMatch=pom.match(/<dependencyManagement>[\s\S]*?<\/dependencyManagement>/);
@@ -297,21 +281,38 @@ function generate(){
 
   /* ===== Overrides ===== */
   if(useExcludeChecked){
-    let o='<!-- EXCLUDES -->\n\n';
-    excludes.forEach((c,p)=>{
-      const[g,a]=p.split(':');
-      o+=`<dependency>\n  <groupId>${g}</groupId>\n  <artifactId>${a}</artifactId>\n  <exclusions>\n`;
-      c.forEach(x=>{
-        const[xg,xa]=x.split(':');
-        o+=`    <exclusion>\n      <groupId>${xg}</groupId>\n      <artifactId>${xa}</artifactId>\n    </exclusion>\n`;
-      });
-      o+=`  </exclusions>\n</dependency>\n\n`;
+    let o = '';
+
+    direct.forEach((version, ga) => {
+    const parentsOfLib = parents.get(ga);
+    const [g, a] = ga.split(':');
+
+    o += `<!-- Override para ${ga} -->\n\n`;
+
+    if (parentsOfLib && parentsOfLib.size > 0) {
+        parentsOfLib.forEach(parent => {
+        const [pg, pa] = parent.split(':');
+
+        o += `<dependency>
+    <groupId>${pg}</groupId>
+    <artifactId>${pa}</artifactId>
+    <exclusions>
+        <exclusion>
+        <groupId>${g}</groupId>
+        <artifactId>${a}</artifactId>
+        </exclusion>
+    </exclusions>
+    </dependency>\n\n`;
+        });
+    }
+
+    o += `<dependency>
+    <groupId>${g}</groupId>
+    <artifactId>${a}</artifactId>
+    <version>${version}</version>
+    </dependency>\n\n`;
     });
-    o+='<!-- DEPENDÊNCIAS DIRETAS -->\n\n';
-    direct.forEach((v,ga)=>{
-      const[g,a]=ga.split(':');
-      o+=`<dependency>\n  <groupId>${g}</groupId>\n  <artifactId>${a}</artifactId>\n  <version>${v}</version>\n</dependency>\n\n`;
-    });
+
     overrideBox.style.display='flex';
     overrideOutput.value=o;
   } else {
