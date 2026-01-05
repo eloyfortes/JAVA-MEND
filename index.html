@@ -1,272 +1,196 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8">
-  <title>Capgemini • POM ATUALIZATOR 3000 </title>
+<meta charset="UTF-8">
+<title>Capgemini • Mend POM Assistant</title>
 
-  <style>
-    * { box-sizing: border-box; }
-
-    body {
-      margin: 0;
-      font-family: "Segoe UI", Arial, sans-serif;
-      background: linear-gradient(135deg, #f6f7fb, #e9ecf3);
-      color: #1f2937;
-    }
-
-    header {
-      background: #0b5ed7;
-      color: white;
-      padding: 20px 30px;
-      font-size: 22px;
-      font-weight: 600;
-      letter-spacing: 0.5px;
-    }
-
-    header span { font-weight: 300; opacity: 0.9; }
-
-    main {
-      padding: 25px;
-      max-width: 1600px;
-      margin: auto;
-    }
-
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 20px;
-      margin-bottom: 20px;
-    }
-
-    .box {
-      background: white;
-      border-radius: 10px;
-      padding: 15px;
-      box-shadow: 0 8px 25px rgba(0,0,0,0.08);
-      display: flex;
-      flex-direction: column;
-    }
-
-    .box h3 {
-      margin: 0 0 10px;
-      font-size: 15px;
-      font-weight: 600;
-      color: #374151;
-    }
-
-    textarea {
-      flex: 1;
-      width: 100%;
-      resize: vertical;
-      min-height: 260px;
-      border-radius: 8px;
-      border: 1px solid #d1d5db;
-      padding: 10px;
-      font-family: Consolas, monospace;
-      font-size: 13px;
-      background: #fafafa;
-    }
-
-    textarea:focus {
-      outline: none;
-      border-color: #0b5ed7;
-      background: #fff;
-    }
-
-    .actions {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin: 20px 0;
-      flex-wrap: wrap;
-      gap: 10px;
-    }
-
-    button {
-      background: #0b5ed7;
-      color: white;
-      border: none;
-      border-radius: 8px;
-      padding: 12px 24px;
-      font-size: 14px;
-      cursor: pointer;
-    }
-
-    button:hover { background: #084298; }
-
-    footer {
-      text-align: center;
-      font-size: 12px;
-      color: #6b7280;
-      padding: 20px;
-    }
-
-    @media (max-width: 1200px) {
-      .grid { grid-template-columns: 1fr; }
-    }
-  </style>
+<style>
+/* ======= LAYOUT ANTIGO (INTACTO) ======= */
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: "Segoe UI", Arial, sans-serif;
+  background: linear-gradient(135deg, #f6f7fb, #e9ecf3);
+  color: #1f2937;
+}
+header {
+  background: #0b5ed7;
+  color: white;
+  padding: 20px 30px;
+  font-size: 22px;
+  font-weight: 600;
+}
+header span { font-weight: 300; opacity: .9; }
+main {
+  padding: 25px;
+  max-width: 1600px;
+  margin: auto;
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3,1fr);
+  gap: 20px;
+}
+.box {
+  background: white;
+  border-radius: 10px;
+  padding: 15px;
+  box-shadow: 0 8px 25px rgba(0,0,0,.08);
+  display: flex;
+  flex-direction: column;
+}
+.box h3 {
+  margin: 0 0 10px;
+  font-size: 15px;
+}
+textarea {
+  flex: 1;
+  resize: vertical;
+  min-height: 260px;
+  border-radius: 8px;
+  border: 1px solid #d1d5db;
+  padding: 10px;
+  font-family: Consolas, monospace;
+  font-size: 13px;
+}
+.actions {
+  display: flex;
+  justify-content: space-between;
+  margin: 20px 0;
+}
+button {
+  background: #0b5ed7;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 12px 24px;
+  cursor: pointer;
+}
+footer {
+  text-align: center;
+  font-size: 12px;
+  color: #6b7280;
+  padding: 20px;
+}
+@media (max-width:1200px){
+  .grid{ grid-template-columns:1fr; }
+}
+</style>
 </head>
 
 <body>
 
 <header>
-  Capgemini <span>• POM ATUALIZATOR 3000</span>
+  Capgemini <span>• Mend POM Assistant</span>
 </header>
 
 <main>
 
-  <div class="grid">
-    <div class="box">
-      <h3>POM.xml</h3>
-      <textarea id="pomInput"></textarea>
-    </div>
-
-    <div class="box">
-      <h3>dependency:tree</h3>
-      <textarea id="treeInput"></textarea>
-    </div>
-
-    <div class="box">
-      <h3>Mend report (JSON)</h3>
-      <textarea id="mendInput"></textarea>
-    </div>
-  </div>
-
-  <div class="actions">
-    <label>
-      <input type="checkbox" id="useExclude">
-      Usar &lt;exclude&gt; + injetar dependência direta (fallback)
-    </label>
-
-    <button onclick="generatePom()">Gerar POM Atualizado</button>
-  </div>
-
+<div class="grid">
   <div class="box">
-    <h3>POM Gerado</h3>
-    <textarea id="output" readonly></textarea>
+    <h3>POM.xml</h3>
+    <textarea id="pomInput"></textarea>
   </div>
+  <div class="box">
+    <h3>dependency:tree</h3>
+    <textarea id="treeInput"></textarea>
+  </div>
+  <div class="box">
+    <h3>Mend report (JSON)</h3>
+    <textarea id="mendInput"></textarea>
+  </div>
+</div>
 
-  <div class="box" id="warningsBox" style="display:none;">
-    <h3>⚠️ Dependências limitadas pela versão do Java</h3>
-    <textarea id="warningsArea" readonly></textarea>
-  </div>
+<div class="actions">
+  <label>
+    <input type="checkbox" id="useExclude">
+    Usar exclude + dependência direta (fallback)
+  </label>
+  <button onclick="generatePom()">Gerar POM Atualizado</button>
+</div>
+
+<div class="box">
+  <h3>POM Gerado</h3>
+  <textarea id="output" readonly></textarea>
+</div>
+
+<div class="box" id="warningsBox" style="display:none">
+  <h3>⚠️ Dependências limitadas pela versão do Java</h3>
+  <textarea id="warningsArea" readonly></textarea>
+</div>
 
 </main>
 
 <footer>
-  zzz
+  Ferramenta assistiva • Não duplica dependencyManagement
 </footer>
 
 <script>
-/* ===== JAVA VERSION ===== */
-function getJavaVersion(pom) {
-  let m = pom.match(/<java.version>(.*?)<\/java.version>/);
-  if (m) return parseInt(m[1]);
-  m = pom.match(/<maven.compiler.source>(.*?)<\/maven.compiler.source>/);
-  if (m) return parseInt(m[1]);
-  return 8;
-}
+/* ===== UTIL ===== */
+const norm = v => v.replace(/[^0-9.]/g,'').split('.').map(n=>+n||0);
+const gt = (a,b)=>norm(a).some((v,i)=>v>(norm(b)[i]||0));
 
-/* ===== VERSION COMPARE ===== */
-function normalize(v) {
-  return v.replace(/[^0-9.]/g, '').split('.').map(n => parseInt(n) || 0);
-}
-function greater(a, b) {
-  const x = normalize(a), y = normalize(b);
-  for (let i = 0; i < Math.max(x.length, y.length); i++) {
-    if ((x[i] || 0) > (y[i] || 0)) return true;
-    if ((x[i] || 0) < (y[i] || 0)) return false;
-  }
-  return false;
-}
-
-/* ===== DEP TREE ===== */
-function parseTree(text) {
-  const s = new Set();
-  text.split('\n').forEach(l => {
-    const m = l.match(/ ([\w.-]+):([\w.-]+):/);
-    if (m) s.add(`${m[1]}:${m[2]}`);
-  });
-  return s;
+/* ===== JAVA ===== */
+function getJava(pom){
+  return +(pom.match(/<java.version>(.*?)<\/java.version>/)?.[1]||8);
 }
 
 /* ===== MEND ===== */
-function extractFixes(mend) {
-  const fixes = new Map();
-  const rx = /([\w.-]+):([\w.-]+):([0-9][0-9A-Za-z_.-]*)/g;
+function extractFixes(m){
+  const r=/([\w.-]+):([\w.-]+):([0-9][\w.-]*)/g,f=new Map();
+  m.libraries?.forEach(l=>l.vulnerabilities?.forEach(v=>{
+    let x; while((x=r.exec(v.topFix?.fixResolution||'')))
+      if(!f.has(x[1]+':'+x[2])||gt(x[3],f.get(x[1]+':'+x[2])))
+        f.set(x[1]+':'+x[2],x[3].split(',')[0]);
+  }));
+  return f;
+}
 
-  mend.libraries?.forEach(lib => {
-    lib.vulnerabilities?.forEach(v => {
-      let m;
-      while ((m = rx.exec(v.topFix?.fixResolution || '')) !== null) {
-        const ga = `${m[1]}:${m[2]}`;
-        const ver = m[3].split(',')[0];
-        if (!fixes.has(ga) || greater(ver, fixes.get(ga))) {
-          fixes.set(ga, ver);
-        }
-      }
-    });
-  });
-  return fixes;
+/* ===== DM PARSER ===== */
+function parseDM(xml){
+  const map=new Map();
+  const rx=/<dependency>[\s\S]*?<groupId>(.*?)<\/groupId>[\s\S]*?<artifactId>(.*?)<\/artifactId>[\s\S]*?<version>(.*?)<\/version>[\s\S]*?<\/dependency>/g;
+  let m; while((m=rx.exec(xml))) map.set(m[1]+':'+m[2],m[3]);
+  return map;
 }
 
 /* ===== MAIN ===== */
-function generatePom() {
-  const pom = pomInput.value;
-  const mend = JSON.parse(mendInput.value);
-  const javaVer = getJavaVersion(pom);
-  const treeDeps = parseTree(treeInput.value);
+function generatePom(){
+  let pom=pomInput.value;
+  const java=getJava(pom);
+  const mend=JSON.parse(mendInput.value);
+  const fixes=extractFixes(mend);
+  const warns=[];
+  
+  let dmMatch=pom.match(/<dependencyManagement>[\s\S]*?<\/dependencyManagement>/);
+  let dmMap=dmMatch?parseDM(dmMatch[0]):new Map();
 
-  const fixes = extractFixes(mend);
-  const warnings = [];
+  fixes.forEach((ver,ga)=>{
+    let applied=ver;
 
-  let dm = `<dependencyManagement>\n  <dependencies>\n`;
-
-  fixes.forEach((ver, ga) => {
-    if (!treeDeps.has(ga)) return;
-
-    let applied = ver;
-
-    /* SPRING */
-    if (ga.startsWith("org.springframework") && javaVer < 17 && greater(ver, "5.3.39")) {
-      warnings.push(
-`${ga}
-- Recomendado (Mend): ${ver}
-- Aplicado: 5.3.39
-- Motivo: Spring 6.x requer Java 17+`
-      );
-      applied = "5.3.39";
+    if(ga.startsWith("org.springframework")&&java<17&&gt(ver,"5.3.39")){
+      warns.push(`${ga}\n- Recomendado: ${ver}\n- Aplicado: 5.3.39\n- Motivo: Spring 6 requer Java 17+`);
+      applied="5.3.39";
     }
-
-    /* LOGBACK */
-    if (ga.startsWith("ch.qos.logback") && javaVer < 11 && greater(ver, "1.2.13")) {
-      warnings.push(
-`${ga}
-- Recomendado (Mend): ${ver}
-- Aplicado: 1.2.13
-- Motivo: Logback >= 1.3 requer Java 11+`
-      );
-      applied = "1.2.13";
+    if(ga.startsWith("ch.qos.logback")&&java<11&&gt(ver,"1.2.13")){
+      warns.push(`${ga}\n- Recomendado: ${ver}\n- Aplicado: 1.2.13\n- Motivo: Logback >=1.3 requer Java 11+`);
+      applied="1.2.13";
     }
-
-    const [g,a] = ga.split(":");
-    dm += `    <dependency>
-      <groupId>${g}</groupId>
-      <artifactId>${a}</artifactId>
-      <version>${applied}</version>
-    </dependency>\n`;
+    dmMap.set(ga,applied);
   });
 
-  dm += `  </dependencies>\n</dependencyManagement>`;
+  let dm='<dependencyManagement>\n  <dependencies>\n';
+  dmMap.forEach((v,ga)=>{
+    const[g,a]=ga.split(':');
+    dm+=`    <dependency>\n      <groupId>${g}</groupId>\n      <artifactId>${a}</artifactId>\n      <version>${v}</version>\n    </dependency>\n`;
+  });
+  dm+='  </dependencies>\n</dependencyManagement>';
 
-  output.value = pom.replace("</project>", "\n\n" + dm + "\n\n</project>");
+  pom=pom.replace(/<dependencyManagement>[\s\S]*?<\/dependencyManagement>/,'');
+  output.value=pom.replace('</project>',`\n\n${dm}\n\n</project>`);
 
-  if (warnings.length) {
-    warningsBox.style.display = "block";
-    warningsArea.value = warnings.join("\n\n");
-  } else {
-    warningsBox.style.display = "none";
-  }
+  warningsBox.style.display=warns.length?'block':'none';
+  warningsArea.value=warns.join('\n\n');
 }
 </script>
 
