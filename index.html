@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <title>Mend → POM Auto-Assistido</title>
+  <title>Mend → POM Assistant</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -21,11 +21,14 @@
       font-size: 14px;
       cursor: pointer;
     }
+    label {
+      font-size: 14px;
+    }
   </style>
 </head>
 <body>
 
-<h1>Mend → POM Atualizado (assistivo)</h1>
+<h1>Mend → POM Atualizado (Assistivo)</h1>
 
 <h3>POM.xml</h3>
 <textarea id="pomInput"></textarea>
@@ -36,38 +39,76 @@
 <h3>Mend report (JSON)</h3>
 <textarea id="mendInput"></textarea>
 
+<label>
+  <input type="checkbox" id="useExclude">
+  Usar &lt;exclude&gt; + injetar dependência direta (fallback)
+</label>
+<br><br>
+
 <button onclick="generatePom()">Gerar POM Atualizado</button>
 
 <h3>POM Gerado</h3>
 <textarea id="output" readonly></textarea>
 
 <script>
-function parseDependencyTree(text) {
-  const deps = new Set();
-
-  text.split('\n').forEach(line => {
-    const m = line.match(/ ([a-zA-Z0-9_.-]+):([a-zA-Z0-9_.-]+):[^:]+:([0-9A-Za-z_.-]+)/);
-    if (m) {
-      deps.add(`${m[1]}:${m[2]}`);
-    }
-  });
-
-  return deps;
+/* =======================
+   VERSION COMPARISON
+======================= */
+function normalizeVersion(v) {
+  return v
+    .replace(/[^0-9.]/g, '')
+    .split('.')
+    .map(n => parseInt(n, 10) || 0);
 }
 
 function isVersionGreater(v1, v2) {
-  const a = v1.split(/[\.-]/).map(x => isNaN(x) ? x : Number(x));
-  const b = v2.split(/[\.-]/).map(x => isNaN(x) ? x : Number(x));
+  const a = normalizeVersion(v1);
+  const b = normalizeVersion(v2);
+  const len = Math.max(a.length, b.length);
 
-  for (let i = 0; i < Math.max(a.length, b.length); i++) {
-    if (a[i] === undefined) return false;
-    if (b[i] === undefined) return true;
-    if (a[i] > b[i]) return true;
-    if (a[i] < b[i]) return false;
+  for (let i = 0; i < len; i++) {
+    const x = a[i] ?? 0;
+    const y = b[i] ?? 0;
+    if (x > y) return true;
+    if (x < y) return false;
   }
   return false;
 }
 
+/* =======================
+   DEPENDENCY TREE
+======================= */
+function parseDependencyTree(text) {
+  const deps = new Set();
+  text.split('\n').forEach(line => {
+    const m = line.match(/ ([a-zA-Z0-9_.-]+):([a-zA-Z0-9_.-]+):[^:]+:/);
+    if (m) deps.add(`${m[1]}:${m[2]}`);
+  });
+  return deps;
+}
+
+function mapDependencyParents(text) {
+  const parents = new Map();
+  let stack = [];
+
+  text.split('\n').forEach(line => {
+    const depth = (line.match(/\|  /g) || []).length;
+    const m = line.match(/ ([a-zA-Z0-9_.-]+):([a-zA-Z0-9_.-]+):[^:]+:/);
+    if (!m) return;
+
+    const ga = `${m[1]}:${m[2]}`;
+    stack[depth] = ga;
+    if (depth > 0) {
+      parents.set(ga, stack[depth - 1]);
+    }
+  });
+
+  return parents;
+}
+
+/* =======================
+   MEND PARSER
+======================= */
 function extractFixesFromMend(mend) {
   const fixes = new Map();
 
@@ -84,24 +125,16 @@ function extractFixesFromMend(mend) {
         .trim();
 
       cleaned.split(';').forEach(part => {
-        const p = part.trim();
-        const pieces = p.split(':');
+        const pieces = part.trim().split(':');
         if (pieces.length < 3) return;
 
         const ga = `${pieces[0]}:${pieces[1]}`;
-        const version = pieces
-          .slice(2)
-          .join(':')
-          .split(',')[0]   // 👈 ignora versões após vírgula
-          .trim();
+        const version = pieces.slice(2).join(':').split(',')[0].trim();
 
         if (!fixes.has(ga)) {
           fixes.set(ga, version);
-        } else {
-          const current = fixes.get(ga);
-          if (isVersionGreater(version, current)) {
-            fixes.set(ga, version); // 👈 pega a MAIOR
-          }
+        } else if (isVersionGreater(version, fixes.get(ga))) {
+          fixes.set(ga, version);
         }
       });
     }
@@ -110,28 +143,25 @@ function extractFixesFromMend(mend) {
   return fixes;
 }
 
-
+/* =======================
+   XML BUILDERS
+======================= */
 function buildDependencyManagement(fixes, treeDeps, existingDM) {
   let xml = [];
   xml.push('<dependencyManagement>');
   xml.push('  <dependencies>');
 
-  if (existingDM) {
-    xml.push(existingDM.trim());
-  }
+  if (existingDM) xml.push(existingDM.trim());
 
   for (const [ga, version] of fixes.entries()) {
     if (!treeDeps.has(ga)) continue;
-    if (existingDM && existingDM.includes(`<artifactId>${ga.split(':')[1]}</artifactId>`)) {
-      continue;
-    }
+    if (existingDM?.includes(`<artifactId>${ga.split(':')[1]}</artifactId>`)) continue;
 
-    const [groupId, artifactId] = ga.split(':');
-
+    const [g, a] = ga.split(':');
     xml.push('');
     xml.push('    <dependency>');
-    xml.push(`      <groupId>${groupId}</groupId>`);
-    xml.push(`      <artifactId>${artifactId}</artifactId>`);
+    xml.push(`      <groupId>${g}</groupId>`);
+    xml.push(`      <artifactId>${a}</artifactId>`);
     xml.push(`      <version>${version}</version>`);
     xml.push('    </dependency>');
   }
@@ -139,45 +169,82 @@ function buildDependencyManagement(fixes, treeDeps, existingDM) {
   xml.push('');
   xml.push('  </dependencies>');
   xml.push('</dependencyManagement>');
+  return xml.join('\n');
+}
+
+function buildExcludes(fixes, parents) {
+  const xml = [];
+
+  for (const [ga, version] of fixes.entries()) {
+    const parent = parents.get(ga);
+    if (!parent) continue;
+
+    const [pg, pa] = parent.split(':');
+    const [g, a] = ga.split(':');
+
+    xml.push('');
+    xml.push('  <!-- Fallback via exclude -->');
+    xml.push('  <dependency>');
+    xml.push(`    <groupId>${pg}</groupId>`);
+    xml.push(`    <artifactId>${pa}</artifactId>`);
+    xml.push('    <exclusions>');
+    xml.push('      <exclusion>');
+    xml.push(`        <groupId>${g}</groupId>`);
+    xml.push(`        <artifactId>${a}</artifactId>`);
+    xml.push('      </exclusion>');
+    xml.push('    </exclusions>');
+    xml.push('  </dependency>');
+
+    xml.push('');
+    xml.push('  <dependency>');
+    xml.push(`    <groupId>${g}</groupId>`);
+    xml.push(`    <artifactId>${a}</artifactId>`);
+    xml.push(`    <version>${version}</version>`);
+    xml.push('  </dependency>');
+  }
 
   return xml.join('\n');
 }
 
+/* =======================
+   MAIN
+======================= */
 function generatePom() {
-  const pom = document.getElementById('pomInput').value;
-  const tree = document.getElementById('treeInput').value;
-  const mendText = document.getElementById('mendInput').value;
+  const pom = pomInput.value;
+  const tree = treeInput.value;
+  const useExclude = document.getElementById('useExclude').checked;
 
   let mend;
   try {
-    mend = JSON.parse(mendText);
+    mend = JSON.parse(mendInput.value);
   } catch {
     alert('JSON do Mend inválido');
     return;
   }
 
   const treeDeps = parseDependencyTree(tree);
+  const parents = mapDependencyParents(tree);
   const fixes = extractFixesFromMend(mend);
 
   let existingDM = null;
   let newPom = pom;
 
   const dmRegex = /<dependencyManagement>([\s\S]*?)<\/dependencyManagement>/;
-
   if (dmRegex.test(pom)) {
     existingDM = pom.match(dmRegex)[1];
     newPom = pom.replace(dmRegex, '');
   }
 
   const dmBlock = buildDependencyManagement(fixes, treeDeps, existingDM);
+  newPom = newPom.replace('</project>', '\n\n' + dmBlock + '\n');
 
-  // injeta antes de </project>
-  newPom = newPom.replace(
-    '</project>',
-    '\n\n' + dmBlock + '\n\n</project>'
-  );
+  if (useExclude) {
+    const excludeBlock = buildExcludes(fixes, parents);
+    newPom = newPom.replace('</dependencies>', '\n' + excludeBlock + '\n</dependencies>');
+  }
 
-  document.getElementById('output').value = newPom;
+  newPom += '\n</project>';
+  output.value = newPom;
 }
 </script>
 
