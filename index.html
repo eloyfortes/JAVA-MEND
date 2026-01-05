@@ -160,18 +160,44 @@ function detectStack(p,t){
 }
 
 /* ========= MEND ========= */
-function extractFixes(m){
-  const r=/([\w.-]+):([\w.-]+):([0-9][\w.-]*)/g;
-  const f=new Map();
-  m.libraries?.forEach(l=>l.vulnerabilities?.forEach(v=>{
-    let x;
-    while((x=r.exec(v.topFix?.fixResolution||''))){
-      const ga=x[1]+':'+x[2];
-      const ver=x[3].split(',')[0];
-      if(!f.has(ga)||gt(ver,f.get(ga)))f.set(ga,ver);
-    }
-  }));
-  return f;
+function extractFixes(m) {
+  const fixes = new Map();
+
+  m.libraries?.forEach(lib => {
+    const ga = `${lib.groupId}:${lib.artifactId}`;
+
+    lib.vulnerabilities?.forEach(v => {
+      const text = v.topFix?.fixResolution || '';
+      const versions = extractVersionsFromFix(text);
+
+      versions.forEach(ver => {
+        if (!fixes.has(ga) || gt(ver, fixes.get(ga))) {
+          fixes.set(ga, ver);
+        }
+      });
+    });
+  });
+
+  return fixes;
+}
+
+function extractVersionsFromFix(text) {
+  const versions = new Set();
+  let m;
+
+  // group:artifact:version
+  const gav = /([\w.-]+):([\w.-]+):([0-9]+\.[0-9][\w.-]*)/g;
+  while ((m = gav.exec(text))) {
+    versions.add(m[3]);
+  }
+
+  // artifact-1.2.3(.4).jar
+  const jar = /-([0-9]+\.[0-9][\w.-]*)\.jar/g;
+  while ((m = jar.exec(text))) {
+    versions.add(m[1]);
+  }
+
+  return [...versions];
 }
 
 /* ========= TREE ========= */
