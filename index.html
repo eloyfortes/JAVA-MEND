@@ -201,6 +201,23 @@ function parseDM(xml){
   return m;
 }
 
+function stripVersionsFromDependencies(pom, managedGAs) {
+  return pom.replace(
+    /<dependency>([\s\S]*?)<\/dependency>/g,
+    block => {
+      const g = block.match(/<groupId>(.*?)<\/groupId>/)?.[1];
+      const a = block.match(/<artifactId>(.*?)<\/artifactId>/)?.[1];
+      if (!g || !a) return block;
+
+      const ga = `${g}:${a}`;
+      if (!managedGAs.has(ga)) return block;
+
+      // remove SOMENTE a versão
+      return block.replace(/<version>[\s\S]*?<\/version>\s*/,'');
+    }
+  );
+}
+
 /* ========= MAIN ========= */
 function generate(){
   const pom=pomInput.value;
@@ -271,8 +288,16 @@ function generate(){
   });
   dm+=`  </dependencies>\n</dependencyManagement>`;
 
-  pomOutput.value=pom.replace(/<dependencyManagement>[\s\S]*?<\/dependencyManagement>/,'')
-                     .replace('</project>',`\n${dm}\n</project>`);
+const managedGAs = new Set(dmMap.keys());
+
+// remove versões duplicadas em <dependencies>
+const cleanedPom = stripVersionsFromDependencies(pom, managedGAs);
+
+// injeta o dependencyManagement
+pomOutput.value = cleanedPom
+  .replace(/<dependencyManagement>[\s\S]*?<\/dependencyManagement>/,'')
+  .replace('</project>', `\n${dm}\n</project>`);
+  
 
   /* ===== Strategy UI ===== */
   strategyBox.style.display='flex';
