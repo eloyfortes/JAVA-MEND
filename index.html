@@ -39,15 +39,16 @@ main {
   flex-direction: column;
 }
 .box h3 { margin: 0 0 10px; font-size: 15px; }
-textarea {
+textarea, pre {
   flex: 1;
   resize: vertical;
-  min-height: 260px;
+  min-height: 200px;
   border-radius: 8px;
   border: 1px solid #d1d5db;
   padding: 10px;
   font-family: Consolas, monospace;
   font-size: 13px;
+  background: #fafafa;
 }
 .actions {
   display: flex;
@@ -71,7 +72,7 @@ footer {
 @media (max-width:1200px){
   .grid{ grid-template-columns:1fr; }
 }
-#warningsBox,#strategyBox,#overrideBox{
+#strategyBox,#warningsBox,#overrideBox{
   display:none;
   padding:10px;
 }
@@ -111,7 +112,8 @@ footer {
 
 <div class="box" id="strategyBox">
   <h3>📐 Estratégia Detectada</h3>
-  <textarea id="strategyArea" readonly></textarea>
+  <div id="strategyText" style="white-space:pre-line;font-size:13px"></div>
+  <pre id="strategySnippet"></pre>
 </div>
 
 <div class="box">
@@ -120,23 +122,23 @@ footer {
 </div>
 
 <div class="box" id="overrideBox">
-  <h3>Overrides manuais</h3>
+  <h3>Overrides manuais (copie apenas o que fizer sentido)</h3>
   <textarea id="overrideOutput" readonly></textarea>
 </div>
 
 <div class="box" id="warningsBox">
-  <h3>⚠️ Warnings</h3>
+  <h3>⚠️ Dependências limitadas pela versão do Java</h3>
   <textarea id="warningsArea" readonly></textarea>
 </div>
 
 </main>
 
 <footer>
-  Ferramenta assistiva • Sem decisões automáticas perigosas
+  Ferramenta assistiva • Decisão explícita • Humano no controle
 </footer>
 
 <script>
-/* ===== UTIL ===== */
+/* ========= UTIL ========= */
 const norm=v=>v.replace(/[^0-9.]/g,'').split('.').map(n=>+n||0);
 const gt=(a,b)=>{
   const A=norm(a),B=norm(b);
@@ -147,31 +149,32 @@ const gt=(a,b)=>{
   return false;
 };
 
-/* ===== JAVA ===== */
+/* ========= JAVA ========= */
 const getJava=p=>+(p.match(/<java.version>(.*?)<\/java.version>/)?.[1]||8);
 
-/* ===== STACK ===== */
-const detectStack=(p,t)=>{
+/* ========= STACK ========= */
+function detectStack(p,t){
   if(/liberty|websphere/i.test(p+t))return'LIBERTY';
   if(/spring/i.test(p+t))return'SPRING';
   return'GENERIC';
-};
+}
 
-/* ===== MEND ===== */
+/* ========= MEND ========= */
 function extractFixes(m){
   const r=/([\w.-]+):([\w.-]+):([0-9][\w.-]*)/g;
   const f=new Map();
   m.libraries?.forEach(l=>l.vulnerabilities?.forEach(v=>{
     let x;
     while((x=r.exec(v.topFix?.fixResolution||''))){
-      const ga=x[1]+':'+x[2],ver=x[3].split(',')[0];
+      const ga=x[1]+':'+x[2];
+      const ver=x[3].split(',')[0];
       if(!f.has(ga)||gt(ver,f.get(ga)))f.set(ga,ver);
     }
   }));
   return f;
 }
 
-/* ===== TREE ===== */
+/* ========= TREE ========= */
 function parseTreeParents(text){
   const lines=text.split('\n').filter(l=>l.includes('+-')||l.includes('\\-'));
   const stack=[],map=new Map();
@@ -190,7 +193,7 @@ function parseTreeParents(text){
   return map;
 }
 
-/* ===== DM ===== */
+/* ========= DM ========= */
 function parseDM(xml){
   const m=new Map();
   const r=/<dependency>[\s\S]*?<groupId>(.*?)<\/groupId>[\s\S]*?<artifactId>(.*?)<\/artifactId>[\s\S]*?<version>(.*?)<\/version>/g;
@@ -198,7 +201,7 @@ function parseDM(xml){
   return m;
 }
 
-/* ===== MAIN ===== */
+/* ========= MAIN ========= */
 function generate(){
   const pom=pomInput.value;
   const tree=treeInput.value;
@@ -211,19 +214,60 @@ function generate(){
   const parents=parseTreeParents(tree);
   const warns=[],dmMap=new Map(),excludes=new Map(),direct=new Map();
 
-  let strategy=`Stack: ${stack}\nJava: ${java}\n`;
+  /* ===== Strategy text ===== */
+  let strategy=`Stack detectado: ${stack}\nJava: ${java}\n\n`;
+  let snippet='';
 
+  if(stack==='SPRING'){
+    strategy+=`Sugestão:\nUtilizar Parent ou BOM do Spring para alinhar versões.\nA decisão não é aplicada automaticamente.\n`;
+    snippet=`<!-- Exemplo de Parent Spring Boot -->
+<parent>
+  <groupId>org.springframework.boot</groupId>
+  <artifactId>spring-boot-starter-parent</artifactId>
+  <version>${java<17?'2.7.18':'3.2.5'}</version>
+  <relativePath/>
+</parent>`;
+  } else if(stack==='LIBERTY'){
+    strategy+=`Sugestão:\nProjetos Liberty não devem trocar o parent.\nUtilizar BOM oficial do Liberty.\n`;
+    snippet=`<!-- Exemplo de BOM do Liberty -->
+<dependencyManagement>
+  <dependencies>
+    <dependency>
+      <groupId>io.openliberty.features</groupId>
+      <artifactId>features-bom</artifactId>
+      <version>${java<11?'23.0.0.12':'24.0.0.3'}</version>
+      <type>pom</type>
+      <scope>import</scope>
+    </dependency>
+  </dependencies>
+</dependencyManagement>`;
+  } else {
+    strategy+=`Sugestão:\nProjeto genérico.\nGerenciar dependências via dependencyManagement pontual.\n`;
+  }
+
+  /* ===== Existing DM ===== */
   const dmMatch=pom.match(/<dependencyManagement>[\s\S]*?<\/dependencyManagement>/);
   if(dmMatch)parseDM(dmMatch[0]).forEach((v,k)=>dmMap.set(k,v));
 
   fixes.forEach((ver,ga)=>{
     let applied=ver;
-    if(ga.startsWith('org.springframework')&&java<17&&gt(ver,'5.3.39')){
-      applied='5.3.39'; warns.push(`${ga} limitado pelo Java`);
+
+    if(ga.startsWith("org.springframework")&&java<17&&gt(ver,"5.3.39")){
+      applied="5.3.39";
+      warns.push(`${ga}
+- Recomendado: ${ver}
+- Aplicado: ${applied}
+- Motivo: Spring 6 requer Java 17+`);
     }
-    if(ga.startsWith('ch.qos.logback')&&java<11&&gt(ver,'1.2.13')){
-      applied='1.2.13'; warns.push(`${ga} limitado pelo Java`);
+
+    if(ga.startsWith("ch.qos.logback")&&java<11&&gt(ver,"1.2.13")){
+      applied="1.2.13";
+      warns.push(`${ga}
+- Recomendado: ${ver}
+- Aplicado: ${applied}
+- Motivo: Logback >= 1.3 requer Java 11+`);
     }
+
     dmMap.set(ga,applied);
 
     if(useExcludeChecked){
@@ -235,6 +279,7 @@ function generate(){
     }
   });
 
+  /* ===== DM XML ===== */
   let dm=`<dependencyManagement>\n  <dependencies>\n`;
   dmMap.forEach((v,ga)=>{
     const[g,a]=ga.split(':');
@@ -245,11 +290,14 @@ function generate(){
   pomOutput.value=pom.replace(/<dependencyManagement>[\s\S]*?<\/dependencyManagement>/,'')
                      .replace('</project>',`\n${dm}\n</project>`);
 
+  /* ===== Strategy UI ===== */
   strategyBox.style.display='flex';
-  strategyArea.value=strategy;
+  strategyText.textContent=strategy;
+  strategySnippet.textContent=snippet;
 
+  /* ===== Overrides ===== */
   if(useExcludeChecked){
-    let o='';
+    let o='<!-- EXCLUDES -->\n\n';
     excludes.forEach((c,p)=>{
       const[g,a]=p.split(':');
       o+=`<dependency>\n  <groupId>${g}</groupId>\n  <artifactId>${a}</artifactId>\n  <exclusions>\n`;
@@ -259,6 +307,7 @@ function generate(){
       });
       o+=`  </exclusions>\n</dependency>\n\n`;
     });
+    o+='<!-- DEPENDÊNCIAS DIRETAS -->\n\n';
     direct.forEach((v,ga)=>{
       const[g,a]=ga.split(':');
       o+=`<dependency>\n  <groupId>${g}</groupId>\n  <artifactId>${a}</artifactId>\n  <version>${v}</version>\n</dependency>\n\n`;
@@ -270,7 +319,7 @@ function generate(){
   }
 
   warningsBox.style.display=warns.length?'flex':'none';
-  warningsArea.value=warns.join('\n');
+  warningsArea.value=warns.join('\n\n');
 }
 </script>
 
