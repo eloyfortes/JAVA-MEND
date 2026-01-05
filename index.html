@@ -5,7 +5,6 @@
 <title>Capgemini • Mend POM Assistant</title>
 
 <style>
-/* ======= LAYOUT ANTIGO (INTACTO) ======= */
 * { box-sizing: border-box; }
 body {
   margin: 0;
@@ -75,6 +74,10 @@ footer {
 @media (max-width:1200px){
   .grid{ grid-template-columns:1fr; }
 }
+#warningsBox {
+  padding: 10px;
+  display: none;
+}
 </style>
 </head>
 
@@ -114,7 +117,7 @@ footer {
   <textarea id="output" readonly></textarea>
 </div>
 
-<div class="box" id="warningsBox" style="display:none">
+<div class="box" id="warningsBox">
   <h3>⚠️ Dependências limitadas pela versão do Java</h3>
   <textarea id="warningsArea" readonly></textarea>
 </div>
@@ -122,75 +125,115 @@ footer {
 </main>
 
 <footer>
-  Ferramenta assistiva • Não duplica dependencyManagement
+  Ferramenta assistiva • Versão final corrigida
 </footer>
 
 <script>
-/* ===== UTIL ===== */
-const norm = v => v.replace(/[^0-9.]/g,'').split('.').map(n=>+n||0);
-const gt = (a,b)=>norm(a).some((v,i)=>v>(norm(b)[i]||0));
+/* ===== VERSION UTIL (CORRIGIDO) ===== */
+const norm = v =>
+  v.replace(/[^0-9.]/g,'').split('.').map(n => parseInt(n,10) || 0);
+
+const gt = (a,b) => {
+  const A = norm(a), B = norm(b);
+  const len = Math.max(A.length, B.length);
+  for (let i=0;i<len;i++){
+    const x = A[i] ?? 0;
+    const y = B[i] ?? 0;
+    if (x > y) return true;
+    if (x < y) return false;
+  }
+  return false;
+};
 
 /* ===== JAVA ===== */
 function getJava(pom){
-  return +(pom.match(/<java.version>(.*?)<\/java.version>/)?.[1]||8);
+  return +(pom.match(/<java.version>(.*?)<\/java.version>/)?.[1] || 8);
 }
 
 /* ===== MEND ===== */
 function extractFixes(m){
-  const r=/([\w.-]+):([\w.-]+):([0-9][\w.-]*)/g,f=new Map();
-  m.libraries?.forEach(l=>l.vulnerabilities?.forEach(v=>{
-    let x; while((x=r.exec(v.topFix?.fixResolution||'')))
-      if(!f.has(x[1]+':'+x[2])||gt(x[3],f.get(x[1]+':'+x[2])))
-        f.set(x[1]+':'+x[2],x[3].split(',')[0]);
-  }));
+  const r=/([\w.-]+):([\w.-]+):([0-9][\w.-]*)/g;
+  const f=new Map();
+
+  m.libraries?.forEach(l =>
+    l.vulnerabilities?.forEach(v => {
+      let x;
+      while((x=r.exec(v.topFix?.fixResolution||''))){
+        const ga = x[1]+':'+x[2];
+        const ver = x[3].split(',')[0];
+        if(!f.has(ga) || gt(ver, f.get(ga))){
+          f.set(ga, ver);
+        }
+      }
+    })
+  );
   return f;
 }
 
-/* ===== DM PARSER ===== */
+/* ===== DEPENDENCY MANAGEMENT PARSER ===== */
 function parseDM(xml){
   const map=new Map();
-  const rx=/<dependency>[\s\S]*?<groupId>(.*?)<\/groupId>[\s\S]*?<artifactId>(.*?)<\/artifactId>[\s\S]*?<version>(.*?)<\/version>[\s\S]*?<\/dependency>/g;
-  let m; while((m=rx.exec(xml))) map.set(m[1]+':'+m[2],m[3]);
+  const rx=/<dependency>[\s\S]*?<groupId>(.*?)<\/groupId>[\s\S]*?<artifactId>(.*?)<\/artifactId>[\s\S]*?<version>(.*?)<\/version>/g;
+  let m;
+  while((m=rx.exec(xml))) map.set(m[1]+':'+m[2],m[3]);
   return map;
 }
 
 /* ===== MAIN ===== */
 function generatePom(){
-  let pom=pomInput.value;
-  const java=getJava(pom);
-  const mend=JSON.parse(mendInput.value);
-  const fixes=extractFixes(mend);
-  const warns=[];
-  
-  let dmMatch=pom.match(/<dependencyManagement>[\s\S]*?<\/dependencyManagement>/);
-  let dmMap=dmMatch?parseDM(dmMatch[0]):new Map();
+  let pom = pomInput.value;
+  const java = getJava(pom);
+  const mend = JSON.parse(mendInput.value);
+  const fixes = extractFixes(mend);
+  const warns = [];
+
+  let dmMatch = pom.match(/<dependencyManagement>[\s\S]*?<\/dependencyManagement>/);
+  let dmMap = dmMatch ? parseDM(dmMatch[0]) : new Map();
 
   fixes.forEach((ver,ga)=>{
-    let applied=ver;
+    let applied = ver;
 
-    if(ga.startsWith("org.springframework")&&java<17&&gt(ver,"5.3.39")){
-      warns.push(`${ga}\n- Recomendado: ${ver}\n- Aplicado: 5.3.39\n- Motivo: Spring 6 requer Java 17+`);
-      applied="5.3.39";
+    /* SPRING BLOCK */
+    if(ga.startsWith("org.springframework") && java < 17 && gt(ver,"5.3.39")){
+      applied = "5.3.39";
+      warns.push(`${ga}
+- Recomendado (Mend): ${ver}
+- Aplicado: ${applied}
+- Motivo: Spring 6.x requer Java 17+`);
     }
-    if(ga.startsWith("ch.qos.logback")&&java<11&&gt(ver,"1.2.13")){
-      warns.push(`${ga}\n- Recomendado: ${ver}\n- Aplicado: 1.2.13\n- Motivo: Logback >=1.3 requer Java 11+`);
-      applied="1.2.13";
+
+    /* LOGBACK BLOCK */
+    if(ga.startsWith("ch.qos.logback") && java < 11 && gt(ver,"1.2.13")){
+      applied = "1.2.13";
+      warns.push(`${ga}
+- Recomendado (Mend): ${ver}
+- Aplicado: ${applied}
+- Motivo: Logback >= 1.3 requer Java 11+`);
     }
-    dmMap.set(ga,applied);
+
+    dmMap.set(ga, applied);
   });
 
-  let dm='<dependencyManagement>\n  <dependencies>\n';
+  let dm = `<dependencyManagement>\n  <dependencies>\n`;
   dmMap.forEach((v,ga)=>{
     const[g,a]=ga.split(':');
-    dm+=`    <dependency>\n      <groupId>${g}</groupId>\n      <artifactId>${a}</artifactId>\n      <version>${v}</version>\n    </dependency>\n`;
+    dm+=`    <dependency>
+      <groupId>${g}</groupId>
+      <artifactId>${a}</artifactId>
+      <version>${v}</version>
+    </dependency>\n`;
   });
-  dm+='  </dependencies>\n</dependencyManagement>';
+  dm += `  </dependencies>\n</dependencyManagement>`;
 
-  pom=pom.replace(/<dependencyManagement>[\s\S]*?<\/dependencyManagement>/,'');
-  output.value=pom.replace('</project>',`\n\n${dm}\n\n</project>`);
+  pom = pom.replace(/<dependencyManagement>[\s\S]*?<\/dependencyManagement>/,'');
+  output.value = pom.replace('</project>',`\n\n${dm}\n\n</project>`);
 
-  warningsBox.style.display=warns.length?'block':'none';
-  warningsArea.value=warns.join('\n\n');
+  if(warns.length){
+    warningsBox.style.display = 'flex';
+    warningsArea.value = warns.join('\n\n');
+  } else {
+    warningsBox.style.display = 'none';
+  }
 }
 </script>
 
