@@ -1,227 +1,277 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<meta charset="UTF-8">
-<title>Capgemini - Maven Dependency Fixer</title>
+  <meta charset="UTF-8">
+  <title>Capgemini • POM ATUALIZATOR 3000</title>
 
-<style>
-body {
-  font-family: Arial, sans-serif;
-  background: #f4f6f8;
-  margin: 0;
-  padding: 20px;
-}
+  <style>
+    * {
+      box-sizing: border-box;
+    }
 
-h1 {
-  text-align: center;
-  color: #003366;
-}
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Arial, sans-serif;
+      background: linear-gradient(135deg, #f6f7fb, #e9ecf3);
+      color: #1f2937;
+     
+    }
 
-.container {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 20px;
-}
+    header {
+      background: #0b5ed7;
+      color: white;
+      padding: 20px 30px;
+      font-size: 22px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
 
-textarea {
-  width: 100%;
-  height: 220px;
-  padding: 10px;
-  font-family: monospace;
-  font-size: 13px;
-  border-radius: 6px;
-  border: 1px solid #ccc;
-}
+    header span {
+      font-weight: 300;
+      opacity: 0.9;
+    }
 
-.full {
-  grid-column: span 2;
-}
+    main {
+      padding: 25px;
+      max-width: 1600px;
+      margin: auto;
+    }
 
-button {
-  padding: 12px 25px;
-  background: #003366;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 14px;
-}
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+      margin-bottom: 20px;
+    }
 
-button:hover {
-  background: #00509e;
-}
+    .box {
+      background: white;
+      border-radius: 10px;
+      padding: 15px;
+      box-shadow: 0 8px 25px rgba(0,0,0,0.08);
+      display: flex;
+      flex-direction: column;
+    }
 
-label {
-  font-weight: bold;
-}
+    .box h3 {
+      margin: 0 0 10px;
+      font-size: 15px;
+      font-weight: 600;
+      color: #374151;
+    }
 
-#warningsBox {
-  display: none;
-}
+    textarea {
+      flex: 1;
+      resize: vertical;
+      min-height: 260px;
+      border-radius: 8px;
+      border: 1px solid #d1d5db;
+      padding: 10px;
+      font-family: Consolas, monospace;
+      font-size: 13px;
+      background: #fafafa;
+    }
 
-.warning {
-  background: #fff3cd;
-  border: 1px solid #ffeeba;
-}
+    textarea:focus {
+      outline: none;
+      border-color: #0b5ed7;
+      background: #fff;
+    }
 
-.output {
-  background: #eef2f7;
-}
-</style>
+    .actions {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin: 20px 0;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .actions label {
+      font-size: 14px;
+    }
+
+    button {
+      background: #0b5ed7;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 12px 24px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    button:hover {
+      background: #084298;
+    }
+
+    .output {
+      margin-top: 20px;
+    }
+
+    footer {
+      text-align: center;
+      font-size: 12px;
+      color: #6b7280;
+      padding: 20px;
+    }
+
+    @media (max-width: 1200px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
 </head>
 
 <body>
 
-<h1>Capgemini – Maven Dependency Fixer</h1>
+<header>
+  Capgemini <span>• POM ATUALIZATOR 3000</span>
+</header>
 
-<div class="container">
+<main>
 
-  <div>
-    <label>POM.xml</label>
-    <textarea id="pomInput"></textarea>
+  <div class="grid">
+    <div class="box">
+      <h3>POM.xml</h3>
+      <textarea id="pomInput"></textarea>
+    </div>
+
+    <div class="box">
+      <h3>dependency:tree</h3>
+      <textarea id="treeInput"></textarea>
+    </div>
+
+    <div class="box">
+      <h3>Mend report (JSON)</h3>
+      <textarea id="mendInput"></textarea>
+    </div>
   </div>
 
-  <div>
-    <label>dependency:tree</label>
-    <textarea id="treeInput"></textarea>
-  </div>
-
-  <div class="full">
-    <label>Relatório Mend (JSON)</label>
-    <textarea id="mendInput"></textarea>
-  </div>
-
-  <div class="full">
+  <div class="actions">
     <label>
       <input type="checkbox" id="useExclude">
-      Gerar alternativa com exclude + dependency direta
+      Usar &lt;exclude&gt; + injetar dependência direta (fallback)
     </label>
+
+    <button onclick="generatePom()">Gerar POM Atualizado</button>
   </div>
 
-  <div class="full" style="text-align:center;">
-    <button onclick="processar()">Gerar POM Atualizado</button>
+  <div class="box output">
+    <h3>POM Gerado</h3>
+    <textarea id="output" readonly></textarea>
   </div>
 
-  <div class="full">
-    <label>POM Sugerido</label>
-    <textarea id="pomOutput" class="output"></textarea>
+  <div class="box output" id="warningsBox" style="display:none;">
+    <h3>⚠️ Dependências limitadas pela versão do Java</h3>
+    <textarea id="warningsArea" readonly></textarea>
   </div>
 
-  <div class="full" id="warningsBox">
-    <label>⚠️ Dependências limitadas pela versão do Java</label>
-    <textarea id="warningsOutput" class="warning" readonly></textarea>
-  </div>
+</main>
 
-</div>
+<footer>
+     zzz
+</footer>
 
 <script>
+/* ===== JAVA VERSION ===== */
 function getJavaVersion(pom) {
-  const m = pom.match(/<java.version>(.*?)<\/java.version>/);
+  let m = pom.match(/<java.version>(.*?)<\/java.version>/);
   if (m) return parseInt(m[1]);
-  if (pom.includes("maven.compiler.source")) {
-    const s = pom.match(/<maven.compiler.source>(.*?)<\/maven.compiler.source>/);
-    if (s) return parseInt(s[1]);
-  }
+  m = pom.match(/<maven.compiler.source>(.*?)<\/maven.compiler.source>/);
+  if (m) return parseInt(m[1]);
   return 8;
 }
 
-function maxSpringForJava(java) {
-  if (java >= 17) return "6.2.11";
-  return "5.3.39";
+/* ===== VERSION COMPARE ===== */
+function normalize(v) {
+  return v.replace(/[^0-9.]/g, '').split('.').map(n => parseInt(n) || 0);
 }
-
-function extractHighestFix(fixResolution, gav) {
-  if (!fixResolution) return null;
-  const parts = fixResolution.split(";");
-  for (let p of parts) {
-    if (p.includes(gav)) {
-      const versions = p.split(":").pop().split(",").map(v => v.trim());
-      return versions.sort((a,b)=>compareVersion(b,a))[0];
-    }
+function greater(a, b) {
+  const x = normalize(a), y = normalize(b);
+  for (let i = 0; i < Math.max(x.length, y.length); i++) {
+    if ((x[i] || 0) > (y[i] || 0)) return true;
+    if ((x[i] || 0) < (y[i] || 0)) return false;
   }
-  return null;
+  return false;
 }
 
-function compareVersion(a,b) {
-  return a.localeCompare(b, undefined, {numeric:true, sensitivity:'base'});
+/* ===== DEP TREE ===== */
+function parseTree(text) {
+  const s = new Set();
+  text.split('\n').forEach(l => {
+    const m = l.match(/ ([\w.-]+):([\w.-]+):/);
+    if (m) s.add(`${m[1]}:${m[2]}`);
+  });
+  return s;
 }
 
-function processar() {
-  const pom = document.getElementById("pomInput").value;
-  const mend = JSON.parse(document.getElementById("mendInput").value);
-  const javaVersion = getJavaVersion(pom);
-  const useExclude = document.getElementById("useExclude").checked;
+/* ===== MEND ===== */
+function extractFixes(mend) {
+  const fixes = new Map();
+  const rx = /([\w.-]+):([\w.-]+):([0-9][0-9A-Za-z_.-]*)/g;
 
-  const depMap = {};
-  const warnings = [];
-
-  mend.forEach(item => {
-    const gav = `${item.groupId}:${item.artifactId}`;
-    let best = null;
-
-    item.vulnerabilities.forEach(v => {
-      const fix = extractHighestFix(v.topFix?.fixResolution, gav);
-      if (fix && (!best || compareVersion(fix, best) > 0)) {
-        best = fix;
+  mend.libraries?.forEach(lib => {
+    lib.vulnerabilities?.forEach(v => {
+      let m;
+      while ((m = rx.exec(v.topFix?.fixResolution || '')) !== null) {
+        const ga = `${m[1]}:${m[2]}`;
+        const ver = m[3].split(',')[0];
+        if (!fixes.has(ga) || greater(ver, fixes.get(ga))) {
+          fixes.set(ga, ver);
+        }
       }
     });
+  });
+  return fixes;
+}
 
-    if (!best) return;
+/* ===== MAIN ===== */
+function generatePom() {
+  const pom = pomInput.value;
+  const mend = JSON.parse(mendInput.value);
+  const javaVer = getJavaVersion(pom);
+  const treeDeps = parseTree(treeInput.value);
 
-    let applied = best;
+  const fixes = extractFixes(mend);
+  const warnings = [];
 
-    if (gav.startsWith("org.springframework")) {
-      const max = maxSpringForJava(javaVersion);
-      if (compareVersion(best, max) > 0) {
-        warnings.push({
-          gav,
-          recommended: best,
-          applied: max,
-          reason: `Spring ${best} requer Java 17+`
-        });
-        applied = max;
-      }
+  let dm = `<dependencyManagement>\n  <dependencies>\n`;
+
+  fixes.forEach((ver, ga) => {
+    if (!treeDeps.has(ga)) return;
+
+    let applied = ver;
+
+    if (ga.startsWith("org.springframework") && javaVer < 17 && greater(ver, "5.3.39")) {
+      warnings.push(
+`${ga}
+- Recomendado (Mend): ${ver}
+- Aplicado: 5.3.39
+- Motivo: Spring 6.x requer Java 17+`
+      );
+      applied = "5.3.39";
     }
 
-    depMap[gav] = applied;
-  });
-
-  let dm = `<dependencyManagement>
-  <dependencies>
-`;
-
-  Object.entries(depMap).forEach(([gav, ver]) => {
-    const [g,a] = gav.split(":");
+    const [g,a] = ga.split(":");
     dm += `    <dependency>
       <groupId>${g}</groupId>
       <artifactId>${a}</artifactId>
-      <version>${ver}</version>
-    </dependency>
-`;
+      <version>${applied}</version>
+    </dependency>\n`;
   });
 
-  dm += `  </dependencies>
-</dependencyManagement>`;
+  dm += `  </dependencies>\n</dependencyManagement>`;
 
-  let outputPom = pom.replace("</project>", dm + "\n\n</project>");
-
-  if (useExclude) {
-    outputPom += "\n\n<!-- Alternativa com exclude deve ser aplicada manualmente nos starters -->";
-  }
-
-  document.getElementById("pomOutput").value = outputPom;
+  output.value = pom.replace("</project>", "\n\n" + dm + "\n\n</project>");
 
   if (warnings.length) {
-    document.getElementById("warningsBox").style.display = "block";
-    document.getElementById("warningsOutput").value =
-      warnings.map(w =>
-`${w.gav}
-- Recomendado (Mend): ${w.recommended}
-- Aplicado: ${w.applied}
-- Motivo: ${w.reason}
-`).join("\n");
+    warningsBox.style.display = "block";
+    warningsArea.value = warnings.join("\n\n");
   } else {
-    document.getElementById("warningsBox").style.display = "none";
+    warningsBox.style.display = "none";
   }
 }
 </script>
