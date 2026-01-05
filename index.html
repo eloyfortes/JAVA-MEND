@@ -129,16 +129,14 @@ footer {
 </footer>
 
 <script>
-/* ===== VERSION UTIL (CORRIGIDO) ===== */
+/* ===== VERSION UTIL ===== */
 const norm = v =>
   v.replace(/[^0-9.]/g,'').split('.').map(n => parseInt(n,10) || 0);
 
 const gt = (a,b) => {
   const A = norm(a), B = norm(b);
-  const len = Math.max(A.length, B.length);
-  for (let i=0;i<len;i++){
-    const x = A[i] ?? 0;
-    const y = B[i] ?? 0;
+  for (let i = 0; i < Math.max(A.length,B.length); i++) {
+    const x = A[i] || 0, y = B[i] || 0;
     if (x > y) return true;
     if (x < y) return false;
   }
@@ -148,6 +146,32 @@ const gt = (a,b) => {
 /* ===== JAVA ===== */
 function getJava(pom){
   return +(pom.match(/<java.version>(.*?)<\/java.version>/)?.[1] || 8);
+}
+
+/* ===== PARSE DEPENDENCY TREE (REAL) ===== */
+function parseTreeParents(text) {
+  const lines = text.split('\n').filter(l => l.includes('+-') || l.includes('\\-'));
+  const stack = [];
+  const parents = new Map(); // child -> Set(parents)
+
+  lines.forEach(line => {
+    const depth = (line.match(/\|/g) || []).length;
+    const m = line.match(/ ([\w.-]+):([\w.-]+):/);
+    if (!m) return;
+
+    const ga = `${m[1]}:${m[2]}`;
+
+    stack[depth] = ga;
+    stack.length = depth + 1;
+
+    if (depth > 0) {
+      const parent = stack[depth - 1];
+      if (!parents.has(ga)) parents.set(ga, new Set());
+      parents.get(ga).add(parent);
+    }
+  });
+
+  return parents;
 }
 
 /* ===== MEND ===== */
@@ -170,7 +194,7 @@ function extractFixes(m){
   return f;
 }
 
-/* ===== DEPENDENCY MANAGEMENT PARSER ===== */
+/* ===== DM PARSER ===== */
 function parseDM(xml){
   const map=new Map();
   const rx=/<dependency>[\s\S]*?<groupId>(.*?)<\/groupId>[\s\S]*?<artifactId>(.*?)<\/artifactId>[\s\S]*?<version>(.*?)<\/version>/g;
@@ -184,8 +208,14 @@ function generatePom(){
   let pom = pomInput.value;
   const java = getJava(pom);
   const mend = JSON.parse(mendInput.value);
+  const useExclude = document.getElementById("useExclude").checked;
+
   const fixes = extractFixes(mend);
+  const parentsMap = parseTreeParents(treeInput.value);
+
   const warns = [];
+  const excludes = new Map(); // parent -> Set(child)
+  const directDeps = new Map();
 
   let dmMatch = pom.match(/<dependencyManagement>[\s\S]*?<\/dependencyManagement>/);
   let dmMap = dmMatch ? parseDM(dmMatch[0]) : new Map();
@@ -196,24 +226,30 @@ function generatePom(){
     /* SPRING BLOCK */
     if(ga.startsWith("org.springframework") && java < 17 && gt(ver,"5.3.39")){
       applied = "5.3.39";
-      warns.push(`${ga}
-- Recomendado (Mend): ${ver}
-- Aplicado: ${applied}
-- Motivo: Spring 6.x requer Java 17+`);
+      warns.push(`${ga}\n- Recomendado: ${ver}\n- Aplicado: ${applied}\n- Motivo: Spring 6 requer Java 17+`);
     }
 
     /* LOGBACK BLOCK */
     if(ga.startsWith("ch.qos.logback") && java < 11 && gt(ver,"1.2.13")){
       applied = "1.2.13";
-      warns.push(`${ga}
-- Recomendado (Mend): ${ver}
-- Aplicado: ${applied}
-- Motivo: Logback >= 1.3 requer Java 11+`);
+      warns.push(`${ga}\n- Recomendado: ${ver}\n- Aplicado: ${applied}\n- Motivo: Logback >= 1.3 requer Java 11+`);
     }
 
     dmMap.set(ga, applied);
+
+    if (useExclude) {
+      const parents = parentsMap.get(ga);
+      if (parents) {
+        parents.forEach(p => {
+          if (!excludes.has(p)) excludes.set(p,new Set());
+          excludes.get(p).add(ga);
+        });
+      }
+      directDeps.set(ga, applied);
+    }
   });
 
+  /* ===== BUILD DM ===== */
   let dm = `<dependencyManagement>\n  <dependencies>\n`;
   dmMap.forEach((v,ga)=>{
     const[g,a]=ga.split(':');
@@ -225,15 +261,44 @@ function generatePom(){
   });
   dm += `  </dependencies>\n</dependencyManagement>`;
 
-  pom = pom.replace(/<dependencyManagement>[\s\S]*?<\/dependencyManagement>/,'');
-  output.value = pom.replace('</project>',`\n\n${dm}\n\n</project>`);
+  /* ===== BUILD EXCLUDES ===== */
+  let excludeXml = '';
+  excludes.forEach((children,parent)=>{
+    const [pg,pa] = parent.split(':');
+    excludeXml += `<dependency>
+  <groupId>${pg}</groupId>
+  <artifactId>${pa}</artifactId>
+  <exclusions>\n`;
+    children.forEach(c=>{
+      const [cg,ca] = c.split(':');
+      excludeXml += `    <exclusion>
+      <groupId>${cg}</groupId>
+      <artifactId>${ca}</artifactId>
+    </exclusion>\n`;
+    });
+    excludeXml += `  </exclusions>
+</dependency>\n\n`;
+  });
 
-  if(warns.length){
-    warningsBox.style.display = 'flex';
-    warningsArea.value = warns.join('\n\n');
-  } else {
-    warningsBox.style.display = 'none';
-  }
+  /* ===== BUILD DIRECT DEPS ===== */
+  let directXml = '';
+  directDeps.forEach((v,ga)=>{
+    const[g,a]=ga.split(':');
+    directXml += `<dependency>
+  <groupId>${g}</groupId>
+  <artifactId>${a}</artifactId>
+  <version>${v}</version>
+</dependency>\n\n`;
+  });
+
+  pom = pom.replace(/<dependencyManagement>[\s\S]*?<\/dependencyManagement>/,'');
+  output.value = pom.replace(
+    '</project>',
+    `\n${dm}\n${useExclude ? '\n<!-- ===== EXCLUDES ===== -->\n'+excludeXml+'\n<!-- ===== DEPENDÊNCIAS DIRETAS ===== -->\n'+directXml : ''}\n</project>`
+  );
+
+  warningsBox.style.display = warns.length ? 'flex' : 'none';
+  warningsArea.value = warns.join('\n\n');
 }
 </script>
 
