@@ -24,11 +24,11 @@ const pomMgr = require("./pomManager");
     );
 
     if (resolved) {
-      console.log(`✔ Resolvido via dependencyManagement`);
+      console.log(` Resolvido via dependencyManagement`);
       continue;
     }
 
-    console.log(`⚠ DM falhou → tentando exclude`);
+    console.log(`DM falhou → tentando exclude`);
 
     const parent = originalTree.find(n =>
       n.depth >= 0 &&
