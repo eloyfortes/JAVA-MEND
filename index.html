@@ -1,353 +1,66 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<meta charset="UTF-8">
-<title>Capgemini • AUTOMATIC POM </title>
-
-<style>
-* { box-sizing: border-box; }
-body {
-  margin: 0;
-  font-family: "Segoe UI", Arial, sans-serif;
-  background: linear-gradient(135deg, #f6f7fb, #e9ecf3);
-  color: #1f2937;
-}
-header {
-  background: #0b5ed7;
-  color: white;
-  padding: 20px 30px;
-  font-size: 22px;
-  font-weight: 600;
-}
-header span { font-weight: 300; opacity: .9; }
-main {
-  padding: 25px;
-  max-width: 1600px;
-  margin: auto;
-}
-.grid {
-  display: grid;
-  grid-template-columns: repeat(3,1fr);
-  gap: 20px;
-}
-.box {
-  background: white;
-  border-radius: 10px;
-  padding: 15px;
-  box-shadow: 0 8px 25px rgba(0,0,0,.08);
-  display: flex;
-  flex-direction: column;
-}
-.box h3 { margin: 0 0 10px; font-size: 15px; }
-textarea, pre {
-  flex: 1;
-  resize: vertical;
-  min-height: 200px;
-  border-radius: 8px;
-  border: 1px solid #d1d5db;
-  padding: 10px;
-  font-family: Consolas, monospace;
-  font-size: 13px;
-  background: #fafafa;
-}
-.actions {
-  display: flex;
-  justify-content: space-between;
-  margin: 20px 0;
-}
-button {
-  background: #0b5ed7;
-  color: white;
-  border: none;
-  border-radius: 8px;
-  padding: 12px 24px;
-  cursor: pointer;
-}
-footer {
-  text-align: center;
-  font-size: 12px;
-  color: #6b7280;
-  padding: 20px;
-}
-@media (max-width:1200px){
-  .grid{ grid-template-columns:1fr; }
-}
-#strategyBox,#warningsBox,#overrideBox{
-  display:none;
-  padding:10px;
-}
-</style>
+  <meta charset="UTF-8" />
+  <title>Capgemini • AUTOMATIC POM</title>
+  <link rel="stylesheet" href="styles.css" />
 </head>
 
 <body>
+  <header>
+    Capgemini <span>• AUTOMATIC POM</span>
+  </header>
 
-<header>
-  Capgemini <span>• AUTOMATIC POM</span>
-</header>
+  <main>
+    <div class="grid">
+      <div class="box">
+        <h3>POM.xml</h3>
+        <textarea id="pomInput"></textarea>
+      </div>
 
-<main>
+      <div class="box">
+        <h3>dependency:tree</h3>
+        <textarea id="treeInput"></textarea>
+      </div>
 
-<div class="grid">
-  <div class="box">
-    <h3>POM.xml</h3>
-    <textarea id="pomInput"></textarea>
-  </div>
-  <div class="box">
-    <h3>dependency:tree</h3>
-    <textarea id="treeInput"></textarea>
-  </div>
-  <div class="box">
-    <h3>Mend report (JSON)</h3>
-    <textarea id="mendInput"></textarea>
-  </div>
-</div>
+      <div class="box">
+        <h3>Mend report (JSON)</h3>
+        <textarea id="mendInput"></textarea>
+      </div>
+    </div>
 
-<div class="actions">
-  <label>
-    <input type="checkbox" id="useExclude">
-    Gerar overrides manuais (exclude + dependência direta)
-  </label>
-  <button onclick="generate()">Gerar</button>
-</div>
+    <div class="actions">
+      <label>
+        <input type="checkbox" id="useExclude" />
+        Gerar overrides manuais (exclude + dependência direta)
+      </label>
+      <button id="generateBtn">Gerar</button>
+    </div>
 
-<div class="box" id="strategyBox">
-  <h3>📐 Estratégia Detectada</h3>
-  <div id="strategyText" style="white-space:pre-line;font-size:13px"></div>
-  <pre id="strategySnippet"></pre>
-</div>
+    <div class="box" id="strategyBox">
+      <h3>📐 Estratégia Detectada</h3>
+      <div id="strategyText"></div>
+      <pre id="strategySnippet"></pre>
+    </div>
 
-<div class="box">
-  <h3>POM Gerado</h3>
-  <textarea id="pomOutput" readonly></textarea>
-</div>
+    <div class="box">
+      <h3>POM Gerado</h3>
+      <textarea id="pomOutput" readonly></textarea>
+    </div>
 
-<div class="box" id="overrideBox">
-  <h3>Overrides manuais (copie apenas o que fizer sentido)</h3>
-  <textarea id="overrideOutput" readonly></textarea>
-</div>
+    <div class="box" id="overrideBox">
+      <h3>Overrides manuais</h3>
+      <textarea id="overrideOutput" readonly></textarea>
+    </div>
 
-<div class="box" id="warningsBox">
-  <h3>⚠️ Dependências limitadas pela versão do Java</h3>
-  <textarea id="warningsArea" readonly></textarea>
-</div>
+    <div class="box" id="warningsBox">
+      <h3>⚠️ Dependências limitadas pela versão do Java</h3>
+      <textarea id="warningsArea" readonly></textarea>
+    </div>
+  </main>
 
-</main>
+  <footer>zzz</footer>
 
-<footer>
-  zzz
-</footer>
-
-<script>
-/* ========= UTIL ========= */
-const norm=v=>v.replace(/[^0-9.]/g,'').split('.').map(n=>+n||0);
-const gt=(a,b)=>{
-  const A=norm(a),B=norm(b);
-  for(let i=0;i<Math.max(A.length,B.length);i++){
-    if((A[i]||0)>(B[i]||0))return true;
-    if((A[i]||0)<(B[i]||0))return false;
-  }
-  return false;
-};
-
-/* ========= JAVA ========= */
-const getJava=p=>+(p.match(/<java.version>(.*?)<\/java.version>/)?.[1]||8);
-
-/* ========= STACK ========= */
-function detectStack(p,t){
-  if(/liberty|websphere/i.test(p+t))return'LIBERTY';
-  if(/spring/i.test(p+t))return'SPRING';
-  return'GENERIC';
-}
-
-/* ========= MEND ========= */
-function extractFixes(m){
-  const r=/([\w.-]+):([\w.-]+):([0-9][\w.-]*)/g;
-  const f=new Map();
-  m.libraries?.forEach(l=>l.vulnerabilities?.forEach(v=>{
-    let x;
-    while((x=r.exec(v.topFix?.fixResolution||''))){
-      const ga=x[1]+':'+x[2];
-      const ver=x[3].split(',')[0];
-      if(!f.has(ga)||gt(ver,f.get(ga)))f.set(ga,ver);
-    }
-  }));
-  return f;
-}
-
-/* ========= TREE ========= */
-function parseTreeParents(text){
-  const lines=text.split('\n').filter(l=>l.includes('+-')||l.includes('\\-'));
-  const stack=[],map=new Map();
-  lines.forEach(l=>{
-    const d=(l.match(/\|/g)||[]).length;
-    const m=l.match(/ ([\w.-]+):([\w.-]+):/);
-    if(!m)return;
-    const ga=m[1]+':'+m[2];
-    stack[d]=ga; stack.length=d+1;
-    if(d>0){
-      const p=stack[d-1];
-      if(!map.has(ga))map.set(ga,new Set());
-      map.get(ga).add(p);
-    }
-  });
-  return map;
-}
-
-/* ========= DM ========= */
-function parseDM(xml){
-  const m=new Map();
-  const r=/<dependency>[\s\S]*?<groupId>(.*?)<\/groupId>[\s\S]*?<artifactId>(.*?)<\/artifactId>[\s\S]*?<version>(.*?)<\/version>/g;
-  let x; while((x=r.exec(xml)))m.set(x[1]+':'+x[2],x[3]);
-  return m;
-}
-
-function stripVersionsFromDependencies(pom, managedGAs) {
-  return pom.replace(
-    /<dependency>([\s\S]*?)<\/dependency>/g,
-    block => {
-      const g = block.match(/<groupId>(.*?)<\/groupId>/)?.[1];
-      const a = block.match(/<artifactId>(.*?)<\/artifactId>/)?.[1];
-      if (!g || !a) return block;
-
-      const ga = `${g}:${a}`;
-      if (!managedGAs.has(ga)) return block;
-
-      // remove SOMENTE a versão
-      return block.replace(/<version>[\s\S]*?<\/version>\s*/,'');
-    }
-  );
-}
-
-/* ========= MAIN ========= */
-function generate(){
-  const pom=pomInput.value;
-  const tree=treeInput.value;
-  const mend=JSON.parse(mendInput.value);
-  const java=getJava(pom);
-  const stack=detectStack(pom,tree);
-  const useExcludeChecked=document.getElementById("useExclude").checked;
-
-  const fixes=extractFixes(mend);
-  const parents=parseTreeParents(tree);
-  const warns=[],dmMap=new Map(),excludes=new Map(),direct=new Map();
-
-  /* ===== Strategy text ===== */
-  let strategy=`Stack detectado: ${stack}\nJava: ${java}\n\n`;
-  let snippet='';
-
-  if(stack==='SPRING'){
-    strategy+=`Sugestão:\nUtilizar Parent ou BOM do Spring para alinhar versões. (menos codigo no dependencyManagment)`;
-    snippet=`<!-- Exemplo de Parent Spring Boot -->
-<parent>
-  <groupId>org.springframework.boot</groupId>
-  <artifactId>spring-boot-starter-parent</artifactId>
-  <version>${java<17?'2.7.18':'3.2.5'}</version>
-  <relativePath/>
-</parent>`;
-  } 
-
-  /* ===== Existing DM ===== */
-  const dmMatch=pom.match(/<dependencyManagement>[\s\S]*?<\/dependencyManagement>/);
-  if(dmMatch)parseDM(dmMatch[0]).forEach((v,k)=>dmMap.set(k,v));
-
-  fixes.forEach((ver,ga)=>{
-    let applied=ver;
-
-    if(ga.startsWith("org.springframework")&&java<17&&gt(ver,"5.3.39")){
-      applied="5.3.39";
-      warns.push(`${ga}
-- Recomendado: ${ver}
-- Aplicado: ${applied}
-- Motivo: Spring 6 requer Java 17+`);
-    }
-
-    if(ga.startsWith("ch.qos.logback")&&java<11&&gt(ver,"1.2.13")){
-      applied="1.2.13";
-      warns.push(`${ga}
-- Recomendado: ${ver}
-- Aplicado: ${applied}
-- Motivo: Logback >= 1.3 requer Java 11+`);
-    }
-
-    dmMap.set(ga,applied);
-
-    if(useExcludeChecked){
-      direct.set(ga,applied);
-      parents.get(ga)?.forEach(p=>{
-        if(!excludes.has(p))excludes.set(p,new Set());
-        excludes.get(p).add(ga);
-      });
-    }
-  });
-
-  /* ===== DM XML ===== */
-  let dm=`<dependencyManagement>\n  <dependencies>\n`;
-  dmMap.forEach((v,ga)=>{
-    const[g,a]=ga.split(':');
-    dm+=`    <dependency>\n      <groupId>${g}</groupId>\n      <artifactId>${a}</artifactId>\n      <version>${v}</version>\n    </dependency>\n`;
-  });
-  dm+=`  </dependencies>\n</dependencyManagement>`;
-
-const managedGAs = new Set(dmMap.keys());
-
-// remove versões duplicadas em <dependencies>
-const cleanedPom = stripVersionsFromDependencies(pom, managedGAs);
-
-// injeta o dependencyManagement
-pomOutput.value = cleanedPom
-  .replace(/<dependencyManagement>[\s\S]*?<\/dependencyManagement>/,'')
-  .replace('</project>', `\n${dm}\n</project>`);
-  
-
-  /* ===== Strategy UI ===== */
-  strategyBox.style.display='flex';
-  strategyText.textContent=strategy;
-  strategySnippet.textContent=snippet;
-
-  /* ===== Overrides ===== */
-  if(useExcludeChecked){
-    let o = '';
-
-    direct.forEach((version, ga) => {
-    const parentsOfLib = parents.get(ga);
-    const [g, a] = ga.split(':');
-
-    o += `<!-- Override para ${ga} -->\n\n`;
-
-    if (parentsOfLib && parentsOfLib.size > 0) {
-        parentsOfLib.forEach(parent => {
-        const [pg, pa] = parent.split(':');
-
-        o += `<dependency>
-    <groupId>${pg}</groupId>
-    <artifactId>${pa}</artifactId>
-    <exclusions>
-        <exclusion>
-        <groupId>${g}</groupId>
-        <artifactId>${a}</artifactId>
-        </exclusion>
-    </exclusions>
-    </dependency>\n\n`;
-        });
-    }
-
-    o += `<dependency>
-    <groupId>${g}</groupId>
-    <artifactId>${a}</artifactId>
-    <version>${version}</version>
-    </dependency>\n\n`;
-    });
-
-    overrideBox.style.display='flex';
-    overrideOutput.value=o;
-  } else {
-    overrideBox.style.display='none';
-  }
-
-  warningsBox.style.display=warns.length?'flex':'none';
-  warningsArea.value=warns.join('\n\n');
-}
-</script>
-
+  <script src="app.js"></script>
 </body>
 </html>
